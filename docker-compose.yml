@@ -1,0 +1,64 @@
+name: authcli
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${DB_USER:-authcli}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-authcli}
+      POSTGRES_DB: ${DB_NAME:-authcli}
+      # Keeps the data directory layout stable across minor image updates.
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      # Named volume: the data survives `docker compose down` and restarts.
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-authcli} -d ${DB_NAME:-authcli}"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
+    restart: unless-stopped
+    # Uncomment to poke at the database from the host with psql.
+    # ports:
+    #   - "55432:5432"
+
+  app:
+    build:
+      context: .
+      args:
+        VERSION: ${VERSION:-0.1.0}
+    # The shell needs a terminal, so this service is meant to be started with
+    # `docker compose run --rm app`. The profile keeps `docker compose up` from
+    # launching it without one.
+    profiles: ["app"]
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DB_HOST: db
+      DB_PORT: "5432"
+      DB_USER: ${DB_USER:-authcli}
+      DB_PASSWORD: ${DB_PASSWORD:-authcli}
+      DB_NAME: ${DB_NAME:-authcli}
+      DB_SSLMODE: ${DB_SSLMODE:-disable}
+      AUTH_SECRET_KEY: ${AUTH_SECRET_KEY:-change-me-in-production}
+      AUTH_SESSION_TIMEOUT: ${AUTH_SESSION_TIMEOUT:-15m}
+      AUTH_SESSION_MAX_LIFETIME: ${AUTH_SESSION_MAX_LIFETIME:-8h}
+      AUTH_MAX_FAILED_ATTEMPTS: ${AUTH_MAX_FAILED_ATTEMPTS:-5}
+      AUTH_LOCKOUT_DURATION: ${AUTH_LOCKOUT_DURATION:-15m}
+      AUTH_BCRYPT_COST: ${AUTH_BCRYPT_COST:-12}
+      AUTH_MIN_PASSWORD_LENGTH: ${AUTH_MIN_PASSWORD_LENGTH:-10}
+      AUTH_TOTP_ISSUER: ${AUTH_TOTP_ISSUER:-osto-cli-auth}
+      AUTH_TOTP_SKEW_PERIODS: ${AUTH_TOTP_SKEW_PERIODS:-1}
+      AUTH_TOTP_CHALLENGE_TTL: ${AUTH_TOTP_CHALLENGE_TTL:-2m}
+      TZ: ${TZ:-UTC}
+    volumes:
+      - cli-history:/home/authcli/history
+    stdin_open: true
+    tty: true
+    restart: "no"
+
+volumes:
+  db-data:
+  cli-history:

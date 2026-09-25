@@ -1,0 +1,8 @@
+.git
+.gitignore
+.env
+bin/
+uploads/
+*.md
+.authcli_history
+docker-compose.yml
